@@ -53,18 +53,32 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['accion']) && $_POST['a
         $conexion->begin_transaction();
 
         try {
-            // Registrar en auditoría antes de eliminar
-            $datos_movimiento = json_encode([
+            $tipos_texto = array(
+                'ingreso_archivo' => 'Ingreso a Archivo',
+                'salida_a_servicio' => 'Salida a Servicio',
+                'devolucion_a_archivo' => 'Devolución',
+                'salida_extramuro' => 'Salida Extramuro',
+                'ingreso_desde_extramuro' => 'Ingreso Extramuro',
+                'traslado_interno' => 'Traslado',
+                'dado_de_baja' => 'Dada de Baja',
+                'reportado_extraviado' => 'Extraviada',
+                'recuperado' => 'Recuperada'
+            );
+            $tipo_texto = $tipos_texto[$movimiento['tipo_movimiento']] ?? $movimiento['tipo_movimiento'];
+            $resumen = "Se eliminó movimiento de HC {$movimiento['numero_hc']} ({$movimiento['paciente']}): {$tipo_texto} - {$movimiento['ubicacion_origen']} → {$movimiento['ubicacion_destino']}";
+            $detalle = [
                 'id_movimiento' => $movimiento['id_movimiento'],
                 'tipo_movimiento' => $movimiento['tipo_movimiento'],
                 'ubicacion_origen' => $movimiento['ubicacion_origen'],
                 'ubicacion_destino' => $movimiento['ubicacion_destino'],
                 'fecha_hora' => $movimiento['fecha_hora'],
                 'observaciones' => $movimiento['observaciones'],
-                'usuario' => $movimiento['username']
-            ]);
-
-            registrarAuditoria('movimientos', $id_movimiento, 'REGISTRO_COMPLETO', $datos_movimiento, '', 'DELETE');
+                'usuario' => $movimiento['username'],
+                'hc_numero' => $movimiento['numero_hc'],
+                'hc_paciente' => $movimiento['paciente'],
+                'hc_fuente' => $movimiento['fuente']
+            ];
+            registrarLog('movimiento', $id_movimiento, 'ELIMINAR', $resumen, $detalle, null);
 
             // Eliminar movimiento
             $stmt_delete = $conexion->prepare("DELETE FROM movimientos WHERE id_movimiento = ?");

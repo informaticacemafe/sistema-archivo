@@ -46,6 +46,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['accion']) && $_POST['a
     if (empty($nuevo_numero_hc)) {
         $mensaje = 'El número de HC no puede estar vacío';
         $tipo_mensaje = 'error';
+    } elseif (strpos($nuevo_numero_hc, ' ') !== false) {
+        $mensaje = 'El número de HC no puede contener espacios';
+        $tipo_mensaje = 'error';
     } else {
         // Verificar que no exista otro HC con ese número en la misma fuente
         $stmt_check = $conexion->prepare("SELECT id_historia FROM historias_clinicas WHERE numero_hc = ? AND id_fuente = ? AND id_historia != ?");
@@ -62,8 +65,11 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['accion']) && $_POST['a
             $stmt_update->bind_param("si", $nuevo_numero_hc, $id_hc);
 
             if ($stmt_update->execute()) {
-                // Registrar en auditoría
-                registrarAuditoria('historias_clinicas', $id_hc, 'numero_hc', $numero_anterior, $nuevo_numero_hc, 'UPDATE');
+                // Registrar en log
+                $resumen = "Se modificó HC {$numero_anterior} → {$nuevo_numero_hc} ({$hc['fuente']}) - Paciente: {$hc['paciente']}";
+                $detalle_anterior = ['numero_hc' => $numero_anterior];
+                $detalle_nuevo = ['numero_hc' => $nuevo_numero_hc];
+                registrarLog('hc', $id_hc, 'EDITAR', $resumen, $detalle_anterior, $detalle_nuevo);
 
                 // Redirigir a detalle de HC con mensaje de éxito
                 header('Location: hc_detalle.php?id=' . $id_hc . '&mensaje=numero_actualizado');
@@ -141,7 +147,10 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['accion']) && $_POST['a
                             <label>Nuevo Número de HC *</label>
                             <input type="text" name="numero_hc"
                                 value="<?php echo htmlspecialchars($hc['numero_hc']); ?>" required autofocus
-                                style="font-size: 16px; font-weight: bold;">
+                                style="font-size: 16px; font-weight: bold;"
+                                onkeydown="return event.key !== ' '"
+                                oninput="this.value = this.value.replace(/ /g, '')"
+                                onpaste="event.preventDefault(); this.value = (event.clipboardData || window.clipboardData).getData('text').replace(/ /g, '')">
                             <small>Ingrese el nuevo número de historia clínica</small>
                         </div>
 

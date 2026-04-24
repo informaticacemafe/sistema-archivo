@@ -58,18 +58,18 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['accion']) && $_POST['a
         $conexion->begin_transaction();
 
         try {
-            // Registrar en auditoría antes de eliminar
-            $datos_hc = json_encode([
+            $resumen = "Se eliminó HC {$hc['numero_hc']} ({$hc['fuente']}) - Paciente: {$hc['paciente']} - con {$total_movimientos} movimiento" . ($total_movimientos != 1 ? 's' : '');
+            $detalle_hc = [
                 'id_historia' => $hc['id_historia'],
                 'numero_hc' => $hc['numero_hc'],
                 'paciente' => $hc['paciente'],
+                'documento' => $hc['numero_documento'],
                 'fuente' => $hc['fuente'],
                 'estado' => $hc['estado'],
                 'ubicacion_actual' => $hc['ubicacion_actual'],
                 'total_movimientos' => $total_movimientos
-            ]);
-
-            registrarAuditoria('historias_clinicas', $id_hc, 'REGISTRO_COMPLETO', $datos_hc, '', 'DELETE');
+            ];
+            registrarLog('hc', $id_hc, 'ELIMINAR', $resumen, $detalle_hc, null);
 
             // Eliminar movimientos asociados primero
             $stmt_delete_mov = $conexion->prepare("DELETE FROM movimientos WHERE id_historia = ?");
@@ -83,16 +83,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['accion']) && $_POST['a
             $stmt_delete_hc->bind_param("i", $id_hc);
             $stmt_delete_hc->execute();
             $stmt_delete_hc->close();
-
-            // Registrar cantidad de movimientos eliminados
-            registrarAuditoria(
-                'movimientos',
-                $id_hc,
-                'ELIMINACION_CASCADA',
-                "Eliminados {$movimientos_eliminados} movimientos",
-                '',
-                'DELETE'
-            );
 
             $conexion->commit();
 

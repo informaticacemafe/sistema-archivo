@@ -86,32 +86,40 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $stmt->bind_param("ssi", $nuevo_estado, $ubicacion_destino, $id_hc);
         $stmt->execute();
 
-        // Registrar auditoría
-        if ($hc['estado'] != $nuevo_estado) {
-            registrarAuditoria('historias_clinicas', $id_hc, 'estado', $hc['estado'], $nuevo_estado);
-        }
-        registrarAuditoria('historias_clinicas', $id_hc, 'ubicacion_actual', $hc['ubicacion_actual'], $ubicacion_destino);
+        // Obtener ID del movimiento insertado
+        $id_movimiento = $conexion->insert_id;
 
         $conexion->commit();
 
-        $mensaje = 'Movimiento registrado exitosamente';
-        $tipo_mensaje = 'success';
+        // Registrar en log
+        $tipos_texto = array(
+            'ingreso_archivo' => 'Ingreso a Archivo',
+            'salida_a_servicio' => 'Salida a Servicio',
+            'devolucion_a_archivo' => 'Devolución',
+            'salida_extramuro' => 'Salida Extramuro',
+            'ingreso_desde_extramuro' => 'Ingreso Extramuro',
+            'traslado_interno' => 'Traslado',
+            'dado_de_baja' => 'Dada de Baja',
+            'reportado_extraviado' => 'Extraviada',
+            'recuperado' => 'Recuperada'
+        );
+        $tipo_texto = $tipos_texto[$tipo_movimiento] ?? $tipo_movimiento;
+        $resumen = "Se registró movimiento en HC {$hc['numero_hc']} ({$hc['paciente']}): {$tipo_texto} - {$hc['ubicacion_actual']} → {$ubicacion_destino}";
+        $detalle_anterior = [
+            'estado' => $hc['estado'],
+            'ubicacion_actual' => $hc['ubicacion_actual']
+        ];
+        $detalle_nuevo = [
+            'tipo_movimiento' => $tipo_movimiento,
+            'estado' => $nuevo_estado,
+            'ubicacion_destino' => $ubicacion_destino,
+            'observaciones' => $observaciones
+        ];
+        registrarLog('movimiento', $id_movimiento, 'CREAR', $resumen, $detalle_anterior, $detalle_nuevo);
 
-        // IMPORTANTE: Recargar datos de HC actualizados
-        $stmt = $conexion->prepare("
-            SELECT h.*, 
-                   CONCAT(p.apellido, ', ', p.nombre) as paciente,
-                   p.numero_documento,
-                   f.nombre as fuente
-            FROM historias_clinicas h
-            INNER JOIN pacientes p ON h.id_paciente = p.id_paciente
-            INNER JOIN fuentes f ON h.id_fuente = f.id_fuente
-            WHERE h.id_historia = ?
-        ");
-        $stmt->bind_param("i", $id_hc);
-        $stmt->execute();
-        $hc = $stmt->get_result()->fetch_assoc();
-        $stmt->close();
+        // Redirigir a detalle de HC
+        header('Location: hc_detalle.php?id=' . $id_hc . '&mensaje=movimiento_registrado');
+        exit();
 
     } catch (Exception $e) {
         $conexion->rollback();

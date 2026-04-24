@@ -36,7 +36,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['accion'])) {
 
             if ($stmt->execute()) {
                 $id_nuevo = $conexion->insert_id;
-                registrarAuditoria('fuentes', $id_nuevo, 'CREACION', '', 'Fuente creada', 'INSERT');
+                $resumen = "Se creó fuente: {$codigo} - {$nombre}";
+                $detalle_nuevo = ['codigo' => $codigo, 'nombre' => $nombre, 'color' => $color, 'tiene_archivo' => $tiene_archivo, 'formato_numeracion' => $formato_numeracion];
+                registrarLog('fuente', $id_nuevo, 'CREAR', $resumen, null, $detalle_nuevo);
                 $mensaje = 'Fuente creada exitosamente';
                 $tipo_mensaje = 'success';
             } else {
@@ -81,16 +83,19 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['accion'])) {
             $stmt->bind_param("sssisi", $nombre, $codigo, $color, $tiene_archivo, $formato_numeracion, $id_fuente);
 
             if ($stmt->execute()) {
-                if ($anterior['nombre'] != $nombre)
-                    registrarAuditoria('fuentes', $id_fuente, 'nombre', $anterior['nombre'], $nombre);
-                if ($anterior['codigo'] != $codigo)
-                    registrarAuditoria('fuentes', $id_fuente, 'codigo', $anterior['codigo'], $codigo);
-                if ($anterior['color'] != $color)
-                    registrarAuditoria('fuentes', $id_fuente, 'color', $anterior['color'], $color);
-                if (isset($anterior['tiene_archivo']) && $anterior['tiene_archivo'] != $tiene_archivo)
-                    registrarAuditoria('fuentes', $id_fuente, 'tiene_archivo', $anterior['tiene_archivo'], $tiene_archivo);
-                if (isset($anterior['formato_numeracion']) && $anterior['formato_numeracion'] != $formato_numeracion)
-                    registrarAuditoria('fuentes', $id_fuente, 'formato_numeracion', $anterior['formato_numeracion'], $formato_numeracion);
+                $detalle_anterior = [];
+                $detalle_nuevo = [];
+                $hay_cambios = false;
+                if ($anterior['nombre'] != $nombre) { $detalle_anterior['nombre'] = $anterior['nombre']; $detalle_nuevo['nombre'] = $nombre; $hay_cambios = true; }
+                if ($anterior['codigo'] != $codigo) { $detalle_anterior['codigo'] = $anterior['codigo']; $detalle_nuevo['codigo'] = $codigo; $hay_cambios = true; }
+                if ($anterior['color'] != $color) { $detalle_anterior['color'] = $anterior['color']; $detalle_nuevo['color'] = $color; $hay_cambios = true; }
+                if (isset($anterior['tiene_archivo']) && $anterior['tiene_archivo'] != $tiene_archivo) { $detalle_anterior['tiene_archivo'] = $anterior['tiene_archivo']; $detalle_nuevo['tiene_archivo'] = $tiene_archivo; $hay_cambios = true; }
+                if (isset($anterior['formato_numeracion']) && $anterior['formato_numeracion'] != $formato_numeracion) { $detalle_anterior['formato_numeracion'] = $anterior['formato_numeracion']; $detalle_nuevo['formato_numeracion'] = $formato_numeracion; $hay_cambios = true; }
+                
+                if ($hay_cambios) {
+                    $resumen = "Se modificó fuente: {$codigo} - {$nombre}";
+                    registrarLog('fuente', $id_fuente, 'EDITAR', $resumen, $detalle_anterior, $detalle_nuevo);
+                }
 
                 $mensaje = 'Fuente actualizada exitosamente';
                 $tipo_mensaje = 'success';
@@ -111,7 +116,10 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['accion'])) {
 
         if ($stmt->execute()) {
             $estado_texto = $nuevo_estado ? 'activo' : 'inactivo';
-            registrarAuditoria('fuentes', $id_fuente, 'activo', $_POST['activo'], $nuevo_estado);
+            $resumen = "Se cambió estado de fuente (ID {$id_fuente}) a: {$estado_texto}";
+            $detalle_anterior = ['activo' => $_POST['activo']];
+            $detalle_nuevo = ['activo' => $nuevo_estado];
+            registrarLog('fuente', $id_fuente, 'EDITAR', $resumen, $detalle_anterior, $detalle_nuevo);
             $mensaje = 'Estado actualizado a ' . $estado_texto;
             $tipo_mensaje = 'success';
         } else {

@@ -32,7 +32,17 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['accion'])) {
             
             if ($stmt->execute()) {
                 $id_nuevo = $conexion->insert_id;
-                registrarAuditoria('pacientes', $id_nuevo, 'CREACION', '', 'Paciente creado', 'INSERT');
+                $resumen = "Se creó paciente: {$apellido}, {$nombre} ({$tipo_doc} {$num_doc})";
+                $detalle_nuevo = [
+                    'tipo_documento' => $tipo_doc,
+                    'numero_documento' => $num_doc,
+                    'nombre' => $nombre,
+                    'apellido' => $apellido,
+                    'fecha_nacimiento' => $fecha_nac,
+                    'sexo' => $sexo,
+                    'telefono' => $telefono
+                ];
+                registrarLog('paciente', $id_nuevo, 'CREAR', $resumen, null, $detalle_nuevo);
                 $mensaje = 'Paciente registrado exitosamente';
                 $tipo_mensaje = 'success';
             } else {
@@ -62,17 +72,20 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['accion'])) {
         $stmt->bind_param("sssssi", $nombre, $apellido, $fecha_nac, $sexo, $telefono, $id_paciente);
         
         if ($stmt->execute()) {
-            // Registrar cambios en auditoría
-            if ($anterior['nombre'] != $nombre) 
-                registrarAuditoria('pacientes', $id_paciente, 'nombre', $anterior['nombre'], $nombre);
-            if ($anterior['apellido'] != $apellido) 
-                registrarAuditoria('pacientes', $id_paciente, 'apellido', $anterior['apellido'], $apellido);
-            if ($anterior['fecha_nacimiento'] != $fecha_nac) 
-                registrarAuditoria('pacientes', $id_paciente, 'fecha_nacimiento', $anterior['fecha_nacimiento'], $fecha_nac);
-            if ($anterior['sexo'] != $sexo) 
-                registrarAuditoria('pacientes', $id_paciente, 'sexo', $anterior['sexo'], $sexo);
-            if ($anterior['telefono'] != $telefono) 
-                registrarAuditoria('pacientes', $id_paciente, 'telefono', $anterior['telefono'], $telefono);
+            // Registrar cambios en el log
+            $detalle_anterior = [];
+            $detalle_nuevo = [];
+            $hay_cambios = false;
+            if ($anterior['nombre'] != $nombre) { $detalle_anterior['nombre'] = $anterior['nombre']; $detalle_nuevo['nombre'] = $nombre; $hay_cambios = true; }
+            if ($anterior['apellido'] != $apellido) { $detalle_anterior['apellido'] = $anterior['apellido']; $detalle_nuevo['apellido'] = $apellido; $hay_cambios = true; }
+            if ($anterior['fecha_nacimiento'] != $fecha_nac) { $detalle_anterior['fecha_nacimiento'] = $anterior['fecha_nacimiento']; $detalle_nuevo['fecha_nacimiento'] = $fecha_nac; $hay_cambios = true; }
+            if ($anterior['sexo'] != $sexo) { $detalle_anterior['sexo'] = $anterior['sexo']; $detalle_nuevo['sexo'] = $sexo; $hay_cambios = true; }
+            if ($anterior['telefono'] != $telefono) { $detalle_anterior['telefono'] = $anterior['telefono']; $detalle_nuevo['telefono'] = $telefono; $hay_cambios = true; }
+            
+            if ($hay_cambios) {
+                $resumen = "Se modificó paciente: {$apellido}, {$nombre}";
+                registrarLog('paciente', $id_paciente, 'EDITAR', $resumen, $detalle_anterior, $detalle_nuevo);
+            }
             
             $mensaje = 'Paciente actualizado exitosamente';
             $tipo_mensaje = 'success';

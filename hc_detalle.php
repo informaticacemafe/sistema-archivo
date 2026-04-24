@@ -18,6 +18,10 @@ if (isset($_GET['mensaje'])) {
             $mensaje = 'Número de HC actualizado exitosamente';
             $tipo_mensaje = 'success';
             break;
+        case 'movimiento_registrado':
+            $mensaje = 'Movimiento registrado exitosamente';
+            $tipo_mensaje = 'success';
+            break;
     }
 }
 
@@ -42,7 +46,10 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['accion']) && $_POST['a
     $stmt->bind_param("si", $nuevas_observaciones, $id_hc);
 
     if ($stmt->execute()) {
-        registrarAuditoria('historias_clinicas', $id_hc, 'observaciones', $obs_anterior, $nuevas_observaciones);
+        $resumen = "Se modificaron observaciones de HC {$hc['numero_hc']} (Paciente: {$hc['paciente']})";
+        $detalle_anterior = ['observaciones' => $obs_anterior];
+        $detalle_nuevo = ['observaciones' => $nuevas_observaciones];
+        registrarLog('hc', $id_hc, 'EDITAR', $resumen, $detalle_anterior, $detalle_nuevo);
         $mensaje = 'Observaciones actualizadas exitosamente';
         $tipo_mensaje = 'success';
     } else {

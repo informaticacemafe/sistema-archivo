@@ -24,6 +24,13 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['accion']) && $_POST['a
     $numero_hc = trim($_POST['numero_hc']);
     $observaciones = trim($_POST['observaciones']);
 
+    // Validar que no contenga espacios
+    $error_validacion = '';
+    if (strpos($numero_hc, ' ') !== false) {
+        $error_validacion = 'El número de HC no puede contener espacios';
+    }
+
+    if (empty($error_validacion)) {
     // Validar que el paciente existe
     $stmt_validar = $conexion->prepare("SELECT id_paciente FROM pacientes WHERE id_paciente = ?");
     $stmt_validar->bind_param("i", $id_paciente);
@@ -72,7 +79,17 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['accion']) && $_POST['a
                 $stmt_mov->bind_param("isi", $id_nueva_hc, $ubicacion_inicial, $usuario_id);
                 $stmt_mov->execute();
 
-                registrarAuditoria('historias_clinicas', $id_nueva_hc, 'CREACION', '', 'HC creada', 'INSERT');
+                $paciente_nombre = $paciente_info ? $paciente_info['nombre_completo'] : '(ID: ' . $id_paciente . ')';
+                $fuente_nombre_log = $fuente_nombre ?? $_POST['id_fuente'];
+                $resumen = "Se creó HC: {$numero_hc} ({$fuente_nombre_log}) - Paciente: {$paciente_nombre}";
+                $detalle_nuevo = [
+                    'id_paciente' => $id_paciente,
+                    'id_fuente' => $id_fuente,
+                    'numero_hc' => $numero_hc,
+                    'ubicacion_inicial' => $ubicacion_inicial,
+                    'observaciones' => $observaciones
+                ];
+                registrarLog('hc', $id_nueva_hc, 'CREAR', $resumen, null, $detalle_nuevo);
 
                 $mensaje = 'Historia Clínica registrada exitosamente';
                 $tipo_mensaje = 'success';
@@ -84,6 +101,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['accion']) && $_POST['a
         $stmt->close();
     }
     $stmt_validar->close();
+    }
 }
 
 // Filtros
@@ -181,6 +199,16 @@ $auto_fuente = count($usuario_fuentes) === 1 ? $usuario_fuentes[0] : null;
     <title>Historias Clínicas - Sistema HC</title>
     <link rel="stylesheet" href="css/estilos.css">
     <style>
+        .input-error {
+            border: 2px solid #dc3545 !important;
+            background-color: #fff8f8 !important;
+        }
+        button:disabled, .btn:disabled {
+            opacity: 0.45 !important;
+            cursor: not-allowed !important;
+            pointer-events: none !important;
+            filter: grayscale(0.6);
+        }
         @media print {
             .no-print {
                 display: none !important;
@@ -411,7 +439,11 @@ $auto_fuente = count($usuario_fuentes) === 1 ? $usuario_fuentes[0] : null;
                                 style="color: #28a745; font-weight: normal; display: none;"></small>
                         </label>
                         <input type="text" name="numero_hc" id="numero_hc" required
-                            placeholder="Se sugerirá automáticamente">
+                            placeholder="Se sugerirá automáticamente"
+                            onkeydown="return event.key !== ' '"
+                            oninput="validarHCDuplicado(this)"
+                            onpaste="event.preventDefault(); this.value = (event.clipboardData || window.clipboardData).getData('text').replace(/ /g, ''); validarHCDuplicado(this)">
+                        <small id="error_hc_existe" style="color: #dc3545; display: none; margin-top: 5px;">Ya existe una HC con ese número en la fuente seleccionada</small>
                     </div>
                 </div>
 
@@ -460,8 +492,13 @@ $auto_fuente = count($usuario_fuentes) === 1 ? $usuario_fuentes[0] : null;
                 document.getElementById('resultados_paciente').style.display = 'none';
                 document.getElementById('error_paciente').textContent = '';
             <?php endif; ?>
-            document.getElementById('numero_hc').value = '';
+            const inputHC = document.getElementById('numero_hc');
+            inputHC.value = '';
+            inputHC.classList.remove('input-error');
             document.getElementById('lbl_sugerencia').style.display = 'none';
+            document.getElementById('error_hc_existe').style.display = 'none';
+            const btnGuardar = document.getElementById('btn_guardar_hc');
+            if (btnGuardar) btnGuardar.disabled = false;
 
             document.getElementById('modalNueva').classList.add('active');
 
@@ -593,6 +630,7 @@ $auto_fuente = count($usuario_fuentes) === 1 ? $usuario_fuentes[0] : null;
         function alCambiarFuente() {
             actualizarOpcionesUbicacion();
             sugerirNumeroHC();
+            validarHCDuplicado(document.getElementById('numero_hc'));
         }
 
         // ── Sugerencia de número de HC ──
@@ -611,11 +649,51 @@ $auto_fuente = count($usuario_fuentes) === 1 ? $usuario_fuentes[0] : null;
                         campoHC.value = data.sugerencia;
                         lbl.textContent = '(sugerido automáticamente)';
                         lbl.style.display = 'inline';
+                        validarHCDuplicado(campoHC);
                     } else {
                         lbl.style.display = 'none';
                     }
                 })
                 .catch(() => { });
+        }
+
+        // ── Validación de HC duplicado en tiempo real (AJAX) ──
+        let timeoutHC;
+        function validarHCDuplicado(input) {
+            const valor = input.value.replace(/ /g, '');
+            input.value = valor;
+            const idFuente = document.getElementById('id_fuente').value;
+            const errorLabel = document.getElementById('error_hc_existe');
+            const btnGuardar = document.getElementById('btn_guardar_hc');
+
+            if (!valor || !idFuente) {
+                input.classList.remove('input-error');
+                errorLabel.style.display = 'none';
+                if (btnGuardar) { btnGuardar.disabled = false; }
+                return;
+            }
+
+            clearTimeout(timeoutHC);
+            timeoutHC = setTimeout(() => {
+                fetch(`verificar_hc_ajax.php?numero_hc=${encodeURIComponent(valor)}&id_fuente=${idFuente}`)
+                    .then(r => r.json())
+                    .then(data => {
+                        if (data.existe) {
+                            input.classList.add('input-error');
+                            errorLabel.style.display = 'block';
+                            if (btnGuardar) { btnGuardar.disabled = true; }
+                        } else {
+                            input.classList.remove('input-error');
+                            errorLabel.style.display = 'none';
+                            if (btnGuardar) { btnGuardar.disabled = false; }
+                        }
+                    })
+                    .catch(() => {
+                        input.classList.remove('input-error');
+                        errorLabel.style.display = 'none';
+                        if (btnGuardar) { btnGuardar.disabled = false; }
+                    });
+            }, 400);
         }
 
         // ── Actualizar opciones de ubicación según fuente seleccionada ──
@@ -668,6 +746,12 @@ $auto_fuente = count($usuario_fuentes) === 1 ? $usuario_fuentes[0] : null;
                         return false;
                     }
                 <?php endif; ?>
+                const errorHC = document.getElementById('error_hc_existe');
+                if (errorHC && errorHC.style.display !== 'none') {
+                    e.preventDefault();
+                    alert('Ya existe una HC con ese número en la fuente seleccionada. Corrija el número antes de guardar.');
+                    return false;
+                }
             });
         }
 

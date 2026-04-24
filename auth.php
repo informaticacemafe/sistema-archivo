@@ -48,4 +48,27 @@ function registrarAuditoria($tabla, $id_registro, $campo, $valor_anterior, $valo
     $stmt->execute();
     $stmt->close();
 }
+
+// Función para registrar eventos en el log de actividades (narrativo, con contexto)
+// $tipo_entidad: 'paciente', 'hc', 'movimiento', 'fuente'
+// $id_entidad: ID del registro afectado
+// $accion: 'CREAR', 'EDITAR', 'ELIMINAR'
+// $resumen: texto legible describiendo el evento
+// $detalle_anterior: array asociativo con valores previos (o null)
+// $detalle_nuevo: array asociativo con valores nuevos (o null)
+function registrarLog($tipo_entidad, $id_entidad, $accion, $resumen, $detalle_anterior = null, $detalle_nuevo = null) {
+    global $conexion;
+    
+    $usuario_id = $_SESSION['usuario_id'];
+    $detalle_anterior_json = $detalle_anterior !== null ? json_encode($detalle_anterior, JSON_UNESCAPED_UNICODE) : null;
+    $detalle_nuevo_json = $detalle_nuevo !== null ? json_encode($detalle_nuevo, JSON_UNESCAPED_UNICODE) : null;
+    
+    $stmt = $conexion->prepare("INSERT INTO log_actividades (usuario_id, tipo_entidad, id_entidad, accion, resumen, detalle_anterior, detalle_nuevo) VALUES (?, ?, ?, ?, ?, ?, ?)");
+    $stmt->bind_param("isssss", $usuario_id, $tipo_entidad, $id_entidad, $accion, $resumen, $detalle_anterior_json, $detalle_nuevo_json);
+    $stmt->execute();
+    $id_log = $conexion->insert_id;
+    $stmt->close();
+    
+    return $id_log;
+}
 ?>
