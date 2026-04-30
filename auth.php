@@ -84,4 +84,32 @@ function registrarLog($tipo_entidad, $id_entidad, $accion, $resumen, $detalle_an
     
     return $id_log;
 }
+
+function usuarioTieneAccesoFuente($id_fuente) {
+    global $conexion;
+    
+    if (tienePermiso('administrador')) {
+        return true;
+    }
+    
+    $usuario_id = $_SESSION['usuario_id'];
+    
+    $stmt = $conexion->prepare("SELECT COUNT(*) as total FROM usuarios_fuentes WHERE id_usuario = ?");
+    $stmt->bind_param("i", $usuario_id);
+    $stmt->execute();
+    $total_asignaciones = $stmt->get_result()->fetch_assoc()['total'];
+    $stmt->close();
+    
+    if ($total_asignaciones == 0) {
+        return false;
+    }
+    
+    $stmt = $conexion->prepare("SELECT COUNT(*) as total FROM usuarios_fuentes WHERE id_usuario = ? AND id_fuente = ?");
+    $stmt->bind_param("ii", $usuario_id, $id_fuente);
+    $stmt->execute();
+    $tiene = $stmt->get_result()->fetch_assoc()['total'] > 0;
+    $stmt->close();
+    
+    return $tiene;
+}
 ?>

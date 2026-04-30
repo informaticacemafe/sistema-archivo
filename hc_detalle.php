@@ -161,6 +161,8 @@ $movimientos = $conexion->query("
                         <?php if (tienePermiso('administrador')): ?>
                             <a href="hc_editar_numero.php?id=<?php echo $id_hc; ?>" class="btn btn-warning btn-sm">✏️ Editar
                                 Número HC</a>
+                        <?php endif; ?>
+                        <?php if (!tienePermiso('auditor') && usuarioTieneAccesoFuente($hc['id_fuente'])): ?>
                             <a href="hc_eliminar.php?id=<?php echo $id_hc; ?>" class="btn btn-danger btn-sm">🗑️ Eliminar
                                 HC</a>
                         <?php endif; ?>

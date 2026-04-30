@@ -3,12 +3,6 @@ session_start();
 require_once 'conexion.php';
 require_once 'auth.php';
 
-// RESTRICCIÓN: Solo administradores
-if (!tienePermiso('administrador')) {
-    header('Location: dashboard.php');
-    exit();
-}
-
 $mensaje = '';
 $tipo_mensaje = '';
 $id_hc = isset($_GET['id']) ? intval($_GET['id']) : 0;
@@ -38,6 +32,12 @@ if (!$hc) {
     exit();
 }
 
+// Verificar permisos: auditores no pueden, otros solo si tienen acceso a la fuente
+if (tienePermiso('auditor') || !usuarioTieneAccesoFuente($hc['id_fuente'])) {
+    header('Location: dashboard.php');
+    exit();
+}
+
 // Contar movimientos asociados
 $stmt_count = $conexion->prepare("SELECT COUNT(*) as total FROM movimientos WHERE id_historia = ?");
 $stmt_count->bind_param("i", $id_hc);
@@ -58,6 +58,34 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['accion']) && $_POST['a
         $conexion->begin_transaction();
 
         try {
+            $usuario_id = $_SESSION['usuario_id'];
+
+            // Insertar en historial de HC eliminadas
+            $stmt_archivar_hc = $conexion->prepare("
+                INSERT INTO historias_clinicas_eliminadas 
+                (id_historia_original, id_paciente, id_fuente, numero_hc, estado, ubicacion_actual, fecha_creacion_hc, observaciones, usuario_elimino)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ");
+            $stmt_archivar_hc->bind_param("iiisssssi",
+                $hc['id_historia'], $hc['id_paciente'], $hc['id_fuente'],
+                $hc['numero_hc'], $hc['estado'], $hc['ubicacion_actual'],
+                $hc['fecha_creacion'], $hc['observaciones'], $usuario_id
+            );
+            $stmt_archivar_hc->execute();
+            $stmt_archivar_hc->close();
+
+            // Copiar movimientos a la tabla de movimientos eliminados
+            $stmt_archivar_mov = $conexion->prepare("
+                INSERT INTO movimientos_hc_eliminadas 
+                (id_historia_original, id_movimiento_original, fecha_hora, tipo_movimiento, ubicacion_origen, ubicacion_destino, usuario_id, observaciones)
+                SELECT id_historia, id_movimiento, fecha_hora, tipo_movimiento, ubicacion_origen, ubicacion_destino, usuario_id, observaciones
+                FROM movimientos WHERE id_historia = ?
+            ");
+            $stmt_archivar_mov->bind_param("i", $id_hc);
+            $stmt_archivar_mov->execute();
+            $movimientos_archivados = $stmt_archivar_mov->affected_rows;
+            $stmt_archivar_mov->close();
+
             $resumen = "Se eliminó HC {$hc['numero_hc']} ({$hc['fuente']}) - Paciente: {$hc['paciente']} - con {$total_movimientos} movimiento" . ($total_movimientos != 1 ? 's' : '');
             $detalle_hc = [
                 'id_historia' => $hc['id_historia'],
@@ -71,7 +99,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['accion']) && $_POST['a
             ];
             registrarLog('hc', $id_hc, 'ELIMINAR', $resumen, $detalle_hc, null);
 
-            // Eliminar movimientos asociados primero
+            // Eliminar movimientos asociados
             $stmt_delete_mov = $conexion->prepare("DELETE FROM movimientos WHERE id_historia = ?");
             $stmt_delete_mov->bind_param("i", $id_hc);
             $stmt_delete_mov->execute();
@@ -130,25 +158,25 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['accion']) && $_POST['a
 
             <div class="card">
                 <div class="card-header" style="background-color: #dc3545; color: white;">
-                    🚨 CONFIRMACIÓN DE ELIMINACIÓN PERMANENTE
+                    🚨 CONFIRMACIÓN DE ELIMINACIÓN
                 </div>
                 <div class="card-body">
                     <div
                         style="background-color: #f8d7da; padding: 20px; border-radius: 5px; border-left: 5px solid #dc3545; margin-bottom: 25px;">
-                        <h3 style="color: #721c24; margin-top: 0;">⛔ ADVERTENCIA CRÍTICA</h3>
+                        <h3 style="color: #721c24; margin-top: 0;">⛔ ADVERTENCIA</h3>
                         <p style="font-size: 16px; margin-bottom: 10px;">
-                            <strong>Esta operación eliminará PERMANENTEMENTE:</strong>
+                            <strong>Esta operación dará de baja la historia clínica:</strong>
                         </p>
                         <ul style="font-size: 15px; color: #721c24;">
-                            <li>La historia clínica completa</li>
-                            <li>Todos los movimientos asociados (
+                            <li>Se eliminará el número de HC del sistema</li>
+                            <li>Todos los movimientos asociados serán removidos (
                                 <?php echo $total_movimientos; ?> movimiento
                                 <?php echo $total_movimientos != 1 ? 's' : ''; ?>)
                             </li>
-                            <li>Todo el historial de la HC</li>
+                            <li>El paciente <strong>NO</strong> será eliminado</li>
                         </ul>
                         <p style="font-size: 16px; font-weight: bold; color: #721c24; margin-bottom: 0;">
-                            ⚠️ ESTA ACCIÓN NO SE PUEDE DESHACER
+                            ⚠️ Se guardará un registro de auditoría con los datos eliminados
                         </p>
                     </div>
 
@@ -193,16 +221,16 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['accion']) && $_POST['a
 
                         <div class="form-group">
                             <label style="color: #dc3545; font-weight: bold; font-size: 16px;">
-                                Para confirmar la eliminación PERMANENTE, escriba "ELIMINAR" (en mayúsculas) *
+                                Para confirmar, escriba "ELIMINAR" (en mayúsculas) *
                             </label>
                             <input type="text" name="confirmacion" id="confirmacion" required
                                 placeholder="Escriba ELIMINAR para confirmar"
                                 style="border: 3px solid #dc3545; font-size: 16px; padding: 12px;">
                             <small style="color: #dc3545; font-weight: bold;">
-                                Esta acción eliminará la HC y sus
+                                Se eliminará la HC con sus
                                 <?php echo $total_movimientos; ?> movimiento
                                 <?php echo $total_movimientos != 1 ? 's' : ''; ?> asociado
-                                <?php echo $total_movimientos != 1 ? 's' : ''; ?>
+                                <?php echo $total_movimientos != 1 ? 's' : ''; ?>. El paciente no será eliminado.
                             </small>
                         </div>
 
@@ -213,7 +241,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['accion']) && $_POST['a
                             </a>
                             <button type="submit" class="btn btn-danger" id="btnEliminar" disabled
                                 style="font-size: 16px; padding: 10px 20px;">
-                                🗑️ ELIMINAR PERMANENTEMENTE
+                                🗑️ ELIMINAR HISTORIA CLÍNICA
                             </button>
                         </div>
                     </form>
@@ -245,13 +273,14 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['accion']) && $_POST['a
             }
 
             const totalMovimientos = <?php echo $total_movimientos; ?>;
-            const mensaje = '⚠️ ÚLTIMA ADVERTENCIA ⚠️\n\n' +
-                'Está a punto de ELIMINAR PERMANENTEMENTE:\n\n' +
+            const mensaje = '⚠️ CONFIRMAR ELIMINACIÓN ⚠️\n\n' +
+                'Está a punto de dar de baja:\n\n' +
                 '• Historia Clínica: <?php echo addslashes($hc['numero_hc']); ?>\n' +
                     '• Paciente: <?php echo addslashes($hc['paciente']); ?>\n' +
-                        '• Total de movimientos: ' + totalMovimientos + '\n\n' +
-                        'ESTA ACCIÓN NO SE PUEDE DESHACER.\n\n' +
-                        '¿Está COMPLETAMENTE SEGURO?';
+                        '• Movimientos asociados: ' + totalMovimientos + '\n\n' +
+                        'El paciente NO será eliminado.\n' +
+                        'Se guardará un registro de auditoría.\n\n' +
+                        '¿Está SEGURO de continuar?';
 
             return confirm(mensaje);
         }
