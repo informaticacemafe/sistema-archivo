@@ -39,6 +39,7 @@ CREATE TABLE pacientes (
     fecha_nacimiento DATE NOT NULL,
     sexo ENUM('M', 'F', 'X') NOT NULL,
     telefono VARCHAR(15) CHARACTER SET utf8mb4 COLLATE utf8mb4_spanish_ci,
+    numeropaciente INT(11) NULL UNIQUE,
     fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     UNIQUE KEY unique_documento (tipo_documento, numero_documento),
     INDEX idx_apellido_nombre (apellido, nombre),

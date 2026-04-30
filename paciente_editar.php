@@ -25,22 +25,50 @@ if (!$paciente) {
 
 // Procesar formulario de edición
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
-    $nombre = trim(strtoupper($_POST['nombre'])); // Convertir a mayúsculas
-    $apellido = trim(strtoupper($_POST['apellido'])); // Convertir a mayúsculas
+    $nombre = trim(strtoupper($_POST['nombre']));
+    $apellido = trim(strtoupper($_POST['apellido']));
     $fecha_nac = $_POST['fecha_nacimiento'];
     $sexo = $_POST['sexo'];
     $telefono = trim($_POST['telefono']);
+    $numeropaciente = (isset($_POST['numeropaciente']) && $_POST['numeropaciente'] !== '') ? intval($_POST['numeropaciente']) : null;
     
     // Obtener valores anteriores para auditoría
-    $stmt = $conexion->prepare("SELECT nombre, apellido, fecha_nacimiento, sexo, telefono FROM pacientes WHERE id_paciente = ?");
+    $stmt = $conexion->prepare("SELECT nombre, apellido, fecha_nacimiento, sexo, telefono, numeropaciente FROM pacientes WHERE id_paciente = ?");
     $stmt->bind_param("i", $id_paciente);
     $stmt->execute();
     $anterior = $stmt->get_result()->fetch_assoc();
     $stmt->close();
+
+    // Verificar unicidad del numero SICAP si cambió
+    if ($numeropaciente !== null && $numeropaciente != $anterior['numeropaciente']) {
+        $stmt_unico = $conexion->prepare("SELECT id_paciente FROM pacientes WHERE numeropaciente = ? AND id_paciente != ?");
+        $stmt_unico->bind_param("ii", $numeropaciente, $id_paciente);
+        $stmt_unico->execute();
+        if ($stmt_unico->get_result()->num_rows > 0) {
+            $mensaje = 'Ya existe un paciente con ese número SICAP';
+            $tipo_mensaje = 'error';
+            $stmt_unico->close();
+            goto fin_editar;
+        }
+        $stmt_unico->close();
+    }
     
-    // Actualizar paciente
-    $stmt = $conexion->prepare("UPDATE pacientes SET nombre = ?, apellido = ?, fecha_nacimiento = ?, sexo = ?, telefono = ? WHERE id_paciente = ?");
-    $stmt->bind_param("sssssi", $nombre, $apellido, $fecha_nac, $sexo, $telefono, $id_paciente);
+    // Actualizar paciente (UPDATE dinámico para manejar numeropaciente NULL)
+    $sets = ['nombre = ?', 'apellido = ?', 'fecha_nacimiento = ?', 'sexo = ?', 'telefono = ?'];
+    $tipos = 'sssss';
+    $params = [$nombre, $apellido, $fecha_nac, $sexo, $telefono];
+    if ($numeropaciente !== null) {
+        $sets[] = 'numeropaciente = ?';
+        $tipos .= 'i';
+        $params[] = $numeropaciente;
+    } else {
+        $sets[] = 'numeropaciente = NULL';
+    }
+    $params[] = $id_paciente;
+    $tipos .= 'i';
+    $sql = "UPDATE pacientes SET " . implode(', ', $sets) . " WHERE id_paciente = ?";
+    $stmt = $conexion->prepare($sql);
+    $stmt->bind_param($tipos, ...$params);
     
     if ($stmt->execute()) {
         // Registrar cambios en el log
@@ -52,6 +80,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         if ($anterior['fecha_nacimiento'] != $fecha_nac) { $detalle_anterior['fecha_nacimiento'] = $anterior['fecha_nacimiento']; $detalle_nuevo['fecha_nacimiento'] = $fecha_nac; $hay_cambios = true; }
         if ($anterior['sexo'] != $sexo) { $detalle_anterior['sexo'] = $anterior['sexo']; $detalle_nuevo['sexo'] = $sexo; $hay_cambios = true; }
         if ($anterior['telefono'] != $telefono) { $detalle_anterior['telefono'] = $anterior['telefono']; $detalle_nuevo['telefono'] = $telefono; $hay_cambios = true; }
+        if ($anterior['numeropaciente'] != $numeropaciente) { $detalle_anterior['numeropaciente'] = $anterior['numeropaciente']; $detalle_nuevo['numeropaciente'] = $numeropaciente; $hay_cambios = true; }
         
         if ($hay_cambios) {
             $resumen = "Se modificó paciente: {$apellido}, {$nombre}";
@@ -67,11 +96,13 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $paciente['fecha_nacimiento'] = $fecha_nac;
         $paciente['sexo'] = $sexo;
         $paciente['telefono'] = $telefono;
+        $paciente['numeropaciente'] = $numeropaciente;
     } else {
         $mensaje = 'Error al actualizar paciente: ' . $conexion->error;
         $tipo_mensaje = 'error';
     }
     $stmt->close();
+    fin_editar:
 }
 
 // Obtener historias clínicas del paciente
@@ -166,6 +197,14 @@ $stmt_hc->close();
                             <label>Teléfono</label>
                             <input type="tel" name="telefono" value="<?php echo htmlspecialchars($paciente['telefono']); ?>">
                         </div>
+                        
+                        <?php if (tienePermiso('administrador')): ?>
+                        <div class="form-group">
+                            <label>Numero de paciente en SICAP</label>
+                            <input type="number" name="numeropaciente" placeholder="Opcional"
+                                value="<?php echo htmlspecialchars($paciente['numeropaciente'] ?? ''); ?>">
+                        </div>
+                        <?php endif; ?>
                         
                         <div class="form-group text-right no-print">
                             <a href="pacientes.php" class="btn btn-secondary">Cancelar</a>

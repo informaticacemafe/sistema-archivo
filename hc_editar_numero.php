@@ -40,14 +40,11 @@ if (!$hc) {
 
 // Procesar actualización
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['accion']) && $_POST['accion'] == 'actualizar') {
-    $nuevo_numero_hc = trim($_POST['numero_hc']);
+    $nuevo_numero_hc = strtoupper(preg_replace('/[^A-Z0-9]/', '', trim($_POST['numero_hc'])));
     $numero_anterior = $hc['numero_hc'];
 
     if (empty($nuevo_numero_hc)) {
         $mensaje = 'El número de HC no puede estar vacío';
-        $tipo_mensaje = 'error';
-    } elseif (strpos($nuevo_numero_hc, ' ') !== false) {
-        $mensaje = 'El número de HC no puede contener espacios';
         $tipo_mensaje = 'error';
     } else {
         // Verificar que no exista otro HC con ese número en la misma fuente
@@ -148,9 +145,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['accion']) && $_POST['a
                             <input type="text" name="numero_hc"
                                 value="<?php echo htmlspecialchars($hc['numero_hc']); ?>" required autofocus
                                 style="font-size: 16px; font-weight: bold;"
-                                onkeydown="return event.key !== ' '"
-                                oninput="this.value = this.value.replace(/ /g, '')"
-                                onpaste="event.preventDefault(); this.value = (event.clipboardData || window.clipboardData).getData('text').replace(/ /g, '')">
+                                onkeydown="return validarTeclaHC(event)"
+                                oninput="sanitizarHC(this)"
+                                onpaste="event.preventDefault(); this.value = (event.clipboardData || window.clipboardData).getData('text').replace(/[^A-Za-z0-9]/g, '').toUpperCase()">
                             <small>Ingrese el nuevo número de historia clínica</small>
                         </div>
 
@@ -175,6 +172,20 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['accion']) && $_POST['a
             }
 
             return confirm('¿Está seguro de cambiar el número de HC de "' + numeroActual + '" a "' + nuevoNumero + '"?\n\nEsta acción quedará registrada en la auditoría.');
+        }
+
+        function validarTeclaHC(event) {
+            const key = event.key;
+            if (key === 'Backspace' || key === 'Delete' ||
+                key.startsWith('Arrow') || key === 'Home' || key === 'End' ||
+                key === 'Tab' || event.ctrlKey || event.metaKey) {
+                return true;
+            }
+            return /^[A-Za-z0-9]$/.test(key);
+        }
+
+        function sanitizarHC(input) {
+            input.value = input.value.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
         }
     </script>
 </body>

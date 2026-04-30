@@ -21,16 +21,9 @@ if (isset($_GET['mensaje'])) {
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['accion']) && $_POST['accion'] == 'crear') {
     $id_paciente = intval($_POST['id_paciente']);
     $id_fuente = intval($_POST['id_fuente']);
-    $numero_hc = trim($_POST['numero_hc']);
+    $numero_hc = strtoupper(preg_replace('/[^A-Z0-9]/', '', trim($_POST['numero_hc'])));
     $observaciones = trim($_POST['observaciones']);
 
-    // Validar que no contenga espacios
-    $error_validacion = '';
-    if (strpos($numero_hc, ' ') !== false) {
-        $error_validacion = 'El número de HC no puede contener espacios';
-    }
-
-    if (empty($error_validacion)) {
     // Validar que el paciente existe
     $stmt_validar = $conexion->prepare("SELECT id_paciente FROM pacientes WHERE id_paciente = ?");
     $stmt_validar->bind_param("i", $id_paciente);
@@ -101,7 +94,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['accion']) && $_POST['a
         $stmt->close();
     }
     $stmt_validar->close();
-    }
 }
 
 // Filtros
@@ -440,9 +432,9 @@ $auto_fuente = count($usuario_fuentes) === 1 ? $usuario_fuentes[0] : null;
                         </label>
                         <input type="text" name="numero_hc" id="numero_hc" required
                             placeholder="Se sugerirá automáticamente"
-                            onkeydown="return event.key !== ' '"
-                            oninput="validarHCDuplicado(this)"
-                            onpaste="event.preventDefault(); this.value = (event.clipboardData || window.clipboardData).getData('text').replace(/ /g, ''); validarHCDuplicado(this)">
+                            onkeydown="return validarTeclaHC(event)"
+                            oninput="sanitizarHC(this)"
+                            onpaste="event.preventDefault(); this.value = (event.clipboardData || window.clipboardData).getData('text').replace(/[^A-Za-z0-9]/g, '').toUpperCase(); validarHCDuplicado(this)">
                         <small id="error_hc_existe" style="color: #dc3545; display: none; margin-top: 5px;">Ya existe una HC con ese número en la fuente seleccionada</small>
                     </div>
                 </div>
@@ -660,7 +652,7 @@ $auto_fuente = count($usuario_fuentes) === 1 ? $usuario_fuentes[0] : null;
         // ── Validación de HC duplicado en tiempo real (AJAX) ──
         let timeoutHC;
         function validarHCDuplicado(input) {
-            const valor = input.value.replace(/ /g, '');
+            const valor = input.value.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
             input.value = valor;
             const idFuente = document.getElementById('id_fuente').value;
             const errorLabel = document.getElementById('error_hc_existe');
@@ -759,6 +751,21 @@ $auto_fuente = count($usuario_fuentes) === 1 ? $usuario_fuentes[0] : null;
             if (event.target.classList.contains('modal')) {
                 event.target.classList.remove('active');
             }
+        }
+
+        function validarTeclaHC(event) {
+            const key = event.key;
+            if (key === 'Backspace' || key === 'Delete' ||
+                key.startsWith('Arrow') || key === 'Home' || key === 'End' ||
+                key === 'Tab' || event.ctrlKey || event.metaKey) {
+                return true;
+            }
+            return /^[A-Za-z0-9]$/.test(key);
+        }
+
+        function sanitizarHC(input) {
+            input.value = input.value.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+            validarHCDuplicado(input);
         }
     </script>
 </body>

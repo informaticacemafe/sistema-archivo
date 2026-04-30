@@ -11,25 +11,49 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['accion'])) {
     if ($_POST['accion'] == 'crear') {
         $tipo_doc = $_POST['tipo_documento'];
         $num_doc = trim($_POST['numero_documento']);
-        $nombre = trim(strtoupper($_POST['nombre'])); // Convertir a mayúsculas
-        $apellido = trim(strtoupper($_POST['apellido'])); // Convertir a mayúsculas
+        $nombre = trim(strtoupper($_POST['nombre']));
+        $apellido = trim(strtoupper($_POST['apellido']));
         $fecha_nac = $_POST['fecha_nacimiento'];
         $sexo = $_POST['sexo'];
         $telefono = trim($_POST['telefono']);
-        
+        $numeropaciente = (isset($_POST['numeropaciente']) && $_POST['numeropaciente'] !== '') ? intval($_POST['numeropaciente']) : null;
+
         // Verificar si ya existe
         $stmt = $conexion->prepare("SELECT id_paciente FROM pacientes WHERE tipo_documento = ? AND numero_documento = ?");
         $stmt->bind_param("ss", $tipo_doc, $num_doc);
         $stmt->execute();
         $resultado = $stmt->get_result();
-        
+
         if ($resultado->num_rows > 0) {
             $mensaje = 'Ya existe un paciente con ese documento';
             $tipo_mensaje = 'error';
+        } elseif ($numeropaciente !== null) {
+            // Verificar unicidad del numero SICAP
+            $stmt_unico = $conexion->prepare("SELECT id_paciente FROM pacientes WHERE numeropaciente = ?");
+            $stmt_unico->bind_param("i", $numeropaciente);
+            $stmt_unico->execute();
+            if ($stmt_unico->get_result()->num_rows > 0) {
+                $mensaje = 'Ya existe un paciente con ese número SICAP';
+                $tipo_mensaje = 'error';
+            } else {
+                $stmt_unico->close();
+                goto ejecutar_insert;
+            }
+            $stmt_unico->close();
         } else {
-            $stmt = $conexion->prepare("INSERT INTO pacientes (tipo_documento, numero_documento, nombre, apellido, fecha_nacimiento, sexo, telefono) VALUES (?, ?, ?, ?, ?, ?, ?)");
-            $stmt->bind_param("sssssss", $tipo_doc, $num_doc, $nombre, $apellido, $fecha_nac, $sexo, $telefono);
-            
+            ejecutar_insert:
+            $columnas = ['tipo_documento', 'numero_documento', 'nombre', 'apellido', 'fecha_nacimiento', 'sexo', 'telefono'];
+            $tipos = 'sssssss';
+            $params = [$tipo_doc, $num_doc, $nombre, $apellido, $fecha_nac, $sexo, $telefono];
+            if ($numeropaciente !== null) {
+                $columnas[] = 'numeropaciente';
+                $tipos .= 'i';
+                $params[] = $numeropaciente;
+            }
+            $sql = "INSERT INTO pacientes (" . implode(', ', $columnas) . ") VALUES (" . implode(', ', array_fill(0, count($params), '?')) . ")";
+            $stmt = $conexion->prepare($sql);
+            $stmt->bind_param($tipos, ...$params);
+
             if ($stmt->execute()) {
                 $id_nuevo = $conexion->insert_id;
                 $resumen = "Se creó paciente: {$apellido}, {$nombre} ({$tipo_doc} {$num_doc})";
@@ -40,7 +64,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['accion'])) {
                     'apellido' => $apellido,
                     'fecha_nacimiento' => $fecha_nac,
                     'sexo' => $sexo,
-                    'telefono' => $telefono
+                    'telefono' => $telefono,
+                    'numeropaciente' => $numeropaciente
                 ];
                 registrarLog('paciente', $id_nuevo, 'CREAR', $resumen, null, $detalle_nuevo);
                 $mensaje = 'Paciente registrado exitosamente';
@@ -55,24 +80,52 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['accion'])) {
     
     if ($_POST['accion'] == 'editar') {
         $id_paciente = $_POST['id_paciente'];
-        $nombre = trim(strtoupper($_POST['nombre'])); // Convertir a mayúsculas
-        $apellido = trim(strtoupper($_POST['apellido'])); // Convertir a mayúsculas
+        $nombre = trim(strtoupper($_POST['nombre']));
+        $apellido = trim(strtoupper($_POST['apellido']));
         $fecha_nac = $_POST['fecha_nacimiento'];
         $sexo = $_POST['sexo'];
         $telefono = trim($_POST['telefono']);
-        
+        $numeropaciente = (isset($_POST['numeropaciente']) && $_POST['numeropaciente'] !== '') ? intval($_POST['numeropaciente']) : null;
+
         // Obtener valores anteriores
-        $stmt = $conexion->prepare("SELECT nombre, apellido, fecha_nacimiento, sexo, telefono FROM pacientes WHERE id_paciente = ?");
+        $stmt = $conexion->prepare("SELECT nombre, apellido, fecha_nacimiento, sexo, telefono, numeropaciente FROM pacientes WHERE id_paciente = ?");
         $stmt->bind_param("i", $id_paciente);
         $stmt->execute();
         $anterior = $stmt->get_result()->fetch_assoc();
         $stmt->close();
-        
-        $stmt = $conexion->prepare("UPDATE pacientes SET nombre = ?, apellido = ?, fecha_nacimiento = ?, sexo = ?, telefono = ? WHERE id_paciente = ?");
-        $stmt->bind_param("sssssi", $nombre, $apellido, $fecha_nac, $sexo, $telefono, $id_paciente);
-        
+
+        // Verificar unicidad del numero SICAP si cambió
+        if ($numeropaciente !== null && $numeropaciente != $anterior['numeropaciente']) {
+            $stmt_unico = $conexion->prepare("SELECT id_paciente FROM pacientes WHERE numeropaciente = ? AND id_paciente != ?");
+            $stmt_unico->bind_param("ii", $numeropaciente, $id_paciente);
+            $stmt_unico->execute();
+            if ($stmt_unico->get_result()->num_rows > 0) {
+                $mensaje = 'Ya existe un paciente con ese número SICAP';
+                $tipo_mensaje = 'error';
+                $stmt_unico->close();
+                goto fin_editar;
+            }
+            $stmt_unico->close();
+        }
+
+        // Construir UPDATE dinámico para manejar numeropaciente NULL
+        $sets = ['nombre = ?', 'apellido = ?', 'fecha_nacimiento = ?', 'sexo = ?', 'telefono = ?'];
+        $tipos = 'sssss';
+        $params = [$nombre, $apellido, $fecha_nac, $sexo, $telefono];
+        if ($numeropaciente !== null) {
+            $sets[] = 'numeropaciente = ?';
+            $tipos .= 'i';
+            $params[] = $numeropaciente;
+        } else {
+            $sets[] = 'numeropaciente = NULL';
+        }
+        $params[] = $id_paciente;
+        $tipos .= 'i';
+        $sql = "UPDATE pacientes SET " . implode(', ', $sets) . " WHERE id_paciente = ?";
+        $stmt = $conexion->prepare($sql);
+        $stmt->bind_param($tipos, ...$params);
+
         if ($stmt->execute()) {
-            // Registrar cambios en el log
             $detalle_anterior = [];
             $detalle_nuevo = [];
             $hay_cambios = false;
@@ -81,12 +134,13 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['accion'])) {
             if ($anterior['fecha_nacimiento'] != $fecha_nac) { $detalle_anterior['fecha_nacimiento'] = $anterior['fecha_nacimiento']; $detalle_nuevo['fecha_nacimiento'] = $fecha_nac; $hay_cambios = true; }
             if ($anterior['sexo'] != $sexo) { $detalle_anterior['sexo'] = $anterior['sexo']; $detalle_nuevo['sexo'] = $sexo; $hay_cambios = true; }
             if ($anterior['telefono'] != $telefono) { $detalle_anterior['telefono'] = $anterior['telefono']; $detalle_nuevo['telefono'] = $telefono; $hay_cambios = true; }
-            
+            if ($anterior['numeropaciente'] != $numeropaciente) { $detalle_anterior['numeropaciente'] = $anterior['numeropaciente']; $detalle_nuevo['numeropaciente'] = $numeropaciente; $hay_cambios = true; }
+
             if ($hay_cambios) {
                 $resumen = "Se modificó paciente: {$apellido}, {$nombre}";
                 registrarLog('paciente', $id_paciente, 'EDITAR', $resumen, $detalle_anterior, $detalle_nuevo);
             }
-            
+
             $mensaje = 'Paciente actualizado exitosamente';
             $tipo_mensaje = 'success';
         } else {
@@ -94,6 +148,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['accion'])) {
             $tipo_mensaje = 'error';
         }
         $stmt->close();
+        fin_editar:
     }
 }
 
@@ -218,6 +273,16 @@ $pacientes = $stmt->get_result();
         .pagination button:disabled {
             opacity: 0.5;
             cursor: not-allowed;
+        }
+        .input-error {
+            border: 2px solid #dc3545 !important;
+            background-color: #fff8f8 !important;
+        }
+        button:disabled, .btn:disabled {
+            opacity: 0.45 !important;
+            cursor: not-allowed !important;
+            pointer-events: none !important;
+            filter: grayscale(0.6);
         }
     </style>
 </head>
@@ -420,9 +485,18 @@ $pacientes = $stmt->get_result();
                     <input type="tel" name="telefono">
                 </div>
                 
+                <?php if (tienePermiso('administrador')): ?>
+                <div class="form-group">
+                    <label>Numero de paciente en SICAP</label>
+                    <input type="number" name="numeropaciente" id="numeropaciente" placeholder="Opcional"
+                        oninput="validarNumeropacienteDuplicado(this)">
+                    <small id="error_numeropaciente_existe" style="color: #dc3545; display: none; margin-top: 5px;">Ya existe un paciente con ese número SICAP</small>
+                </div>
+                <?php endif; ?>
+                
                 <div class="form-group text-right">
                     <button type="button" class="btn btn-secondary" onclick="cerrarModal('modalNuevo')">Cancelar</button>
-                    <button type="submit" class="btn btn-success">Guardar</button>
+                    <button type="submit" class="btn btn-success" id="btn_guardar_paciente">Guardar</button>
                 </div>
             </form>
         </div>
@@ -431,6 +505,14 @@ $pacientes = $stmt->get_result();
     <script>
         function abrirModalNuevo() {
             document.getElementById('modalNuevo').classList.add('active');
+            const inputSicap = document.getElementById('numeropaciente');
+            if (inputSicap) {
+                inputSicap.value = '';
+                inputSicap.classList.remove('input-error');
+                document.getElementById('error_numeropaciente_existe').style.display = 'none';
+            }
+            const btnGuardar = document.getElementById('btn_guardar_paciente');
+            if (btnGuardar) { btnGuardar.disabled = false; }
         }
         
         function cerrarModal(id) {
@@ -440,7 +522,59 @@ $pacientes = $stmt->get_result();
         function editarPaciente(id) {
             window.location.href = 'paciente_editar.php?id=' + id;
         }
-        
+
+        // Validación de número SICAP duplicado en tiempo real (AJAX)
+        let timeoutSicap;
+        function validarNumeropacienteDuplicado(input) {
+            const valor = input.value.trim();
+            const errorLabel = document.getElementById('error_numeropaciente_existe');
+            const btnGuardar = document.getElementById('btn_guardar_paciente');
+
+            if (!valor) {
+                input.classList.remove('input-error');
+                errorLabel.style.display = 'none';
+                if (btnGuardar) { btnGuardar.disabled = false; }
+                return;
+            }
+
+            clearTimeout(timeoutSicap);
+            timeoutSicap = setTimeout(() => {
+                fetch(`verificar_numeropaciente_ajax.php?numeropaciente=${encodeURIComponent(valor)}`)
+                    .then(r => r.json())
+                    .then(data => {
+                        if (data.existe) {
+                            input.classList.add('input-error');
+                            errorLabel.style.display = 'block';
+                            if (btnGuardar) { btnGuardar.disabled = true; }
+                        } else {
+                            input.classList.remove('input-error');
+                            errorLabel.style.display = 'none';
+                            if (btnGuardar) { btnGuardar.disabled = false; }
+                        }
+                    })
+                    .catch(() => {
+                        input.classList.remove('input-error');
+                        errorLabel.style.display = 'none';
+                        if (btnGuardar) { btnGuardar.disabled = false; }
+                    });
+            }, 400);
+        }
+
+        // Bloquear submit si el número SICAP ya existe
+        document.addEventListener('DOMContentLoaded', function () {
+            const form = document.querySelector('#modalNuevo form');
+            if (form) {
+                form.addEventListener('submit', function (e) {
+                    const errorSicap = document.getElementById('error_numeropaciente_existe');
+                    if (errorSicap && errorSicap.style.display !== 'none') {
+                        e.preventDefault();
+                        alert('Ya existe un paciente con ese número SICAP. Corrija el número antes de guardar.');
+                        return false;
+                    }
+                });
+            }
+        });
+
         window.onclick = function(event) {
             if (event.target.classList.contains('modal')) {
                 event.target.classList.remove('active');
