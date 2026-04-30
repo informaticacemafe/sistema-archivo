@@ -75,12 +75,12 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $detalle_anterior = [];
         $detalle_nuevo = [];
         $hay_cambios = false;
-        if ($anterior['nombre'] != $nombre) { $detalle_anterior['nombre'] = $anterior['nombre']; $detalle_nuevo['nombre'] = $nombre; $hay_cambios = true; }
-        if ($anterior['apellido'] != $apellido) { $detalle_anterior['apellido'] = $anterior['apellido']; $detalle_nuevo['apellido'] = $apellido; $hay_cambios = true; }
-        if ($anterior['fecha_nacimiento'] != $fecha_nac) { $detalle_anterior['fecha_nacimiento'] = $anterior['fecha_nacimiento']; $detalle_nuevo['fecha_nacimiento'] = $fecha_nac; $hay_cambios = true; }
-        if ($anterior['sexo'] != $sexo) { $detalle_anterior['sexo'] = $anterior['sexo']; $detalle_nuevo['sexo'] = $sexo; $hay_cambios = true; }
-        if ($anterior['telefono'] != $telefono) { $detalle_anterior['telefono'] = $anterior['telefono']; $detalle_nuevo['telefono'] = $telefono; $hay_cambios = true; }
-        if ($anterior['numeropaciente'] != $numeropaciente) { $detalle_anterior['numeropaciente'] = $anterior['numeropaciente']; $detalle_nuevo['numeropaciente'] = $numeropaciente; $hay_cambios = true; }
+        if ($anterior['nombre'] != $nombre) { $detalle_anterior['nombre'] = $anterior['nombre']; $detalle_nuevo['nombre'] = $nombre; $hay_cambios = true; registrarAuditoria('pacientes', $id_paciente, 'nombre', $anterior['nombre'], $nombre); }
+        if ($anterior['apellido'] != $apellido) { $detalle_anterior['apellido'] = $anterior['apellido']; $detalle_nuevo['apellido'] = $apellido; $hay_cambios = true; registrarAuditoria('pacientes', $id_paciente, 'apellido', $anterior['apellido'], $apellido); }
+        if ($anterior['fecha_nacimiento'] != $fecha_nac) { $detalle_anterior['fecha_nacimiento'] = $anterior['fecha_nacimiento']; $detalle_nuevo['fecha_nacimiento'] = $fecha_nac; $hay_cambios = true; registrarAuditoria('pacientes', $id_paciente, 'fecha_nacimiento', $anterior['fecha_nacimiento'], $fecha_nac); }
+        if ($anterior['sexo'] != $sexo) { $detalle_anterior['sexo'] = $anterior['sexo']; $detalle_nuevo['sexo'] = $sexo; $hay_cambios = true; registrarAuditoria('pacientes', $id_paciente, 'sexo', $anterior['sexo'], $sexo); }
+        if ($anterior['telefono'] != $telefono) { $detalle_anterior['telefono'] = $anterior['telefono']; $detalle_nuevo['telefono'] = $telefono; $hay_cambios = true; registrarAuditoria('pacientes', $id_paciente, 'telefono', $anterior['telefono'], $telefono); }
+        if ($anterior['numeropaciente'] != $numeropaciente) { $detalle_anterior['numeropaciente'] = $anterior['numeropaciente']; $detalle_nuevo['numeropaciente'] = $numeropaciente; $hay_cambios = true; registrarAuditoria('pacientes', $id_paciente, 'numeropaciente', $anterior['numeropaciente'], $numeropaciente); }
         
         if ($hay_cambios) {
             $resumen = "Se modificó paciente: {$apellido}, {$nombre}";

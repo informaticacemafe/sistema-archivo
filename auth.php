@@ -44,9 +44,15 @@ function registrarAuditoria($tabla, $id_registro, $campo, $valor_anterior, $valo
     $usuario_id = $_SESSION['usuario_id'];
     
     $stmt = $conexion->prepare("INSERT INTO auditoria (tabla, id_registro, campo, valor_anterior, valor_nuevo, usuario_id, accion) VALUES (?, ?, ?, ?, ?, ?, ?)");
-    $stmt->bind_param("sisssds", $tabla, $id_registro, $campo, $valor_anterior, $valor_nuevo, $usuario_id, $accion);
-    $stmt->execute();
-    $stmt->close();
+    if ($stmt) {
+        $stmt->bind_param("sisssis", $tabla, $id_registro, $campo, $valor_anterior, $valor_nuevo, $usuario_id, $accion);
+        if (!$stmt->execute()) {
+            error_log("registrarAuditoria: fallo al insertar - " . $stmt->error);
+        }
+        $stmt->close();
+    } else {
+        error_log("registrarAuditoria: fallo al preparar query - " . $conexion->error);
+    }
 }
 
 // Función para registrar eventos en el log de actividades (narrativo, con contexto)
@@ -64,10 +70,17 @@ function registrarLog($tipo_entidad, $id_entidad, $accion, $resumen, $detalle_an
     $detalle_nuevo_json = $detalle_nuevo !== null ? json_encode($detalle_nuevo, JSON_UNESCAPED_UNICODE) : null;
     
     $stmt = $conexion->prepare("INSERT INTO log_actividades (usuario_id, tipo_entidad, id_entidad, accion, resumen, detalle_anterior, detalle_nuevo) VALUES (?, ?, ?, ?, ?, ?, ?)");
-    $stmt->bind_param("isssss", $usuario_id, $tipo_entidad, $id_entidad, $accion, $resumen, $detalle_anterior_json, $detalle_nuevo_json);
-    $stmt->execute();
-    $id_log = $conexion->insert_id;
-    $stmt->close();
+    if ($stmt) {
+        $stmt->bind_param("issssss", $usuario_id, $tipo_entidad, $id_entidad, $accion, $resumen, $detalle_anterior_json, $detalle_nuevo_json);
+        if (!$stmt->execute()) {
+            error_log("registrarLog: fallo al insertar - " . $stmt->error);
+        }
+        $id_log = $conexion->insert_id;
+        $stmt->close();
+    } else {
+        error_log("registrarLog: fallo al preparar query - " . $conexion->error);
+        $id_log = 0;
+    }
     
     return $id_log;
 }

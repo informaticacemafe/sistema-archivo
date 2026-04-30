@@ -67,6 +67,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['accion']) && $_POST['a
                 $detalle_anterior = ['numero_hc' => $numero_anterior];
                 $detalle_nuevo = ['numero_hc' => $nuevo_numero_hc];
                 registrarLog('hc', $id_hc, 'EDITAR', $resumen, $detalle_anterior, $detalle_nuevo);
+                registrarAuditoria('historias_clinicas', $id_hc, 'numero_hc', $numero_anterior, $nuevo_numero_hc);
 
                 // Redirigir a detalle de HC con mensaje de éxito
                 header('Location: hc_detalle.php?id=' . $id_hc . '&mensaje=numero_actualizado');

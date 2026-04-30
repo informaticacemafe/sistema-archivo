@@ -50,6 +50,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['accion']) && $_POST['a
         $detalle_anterior = ['observaciones' => $obs_anterior];
         $detalle_nuevo = ['observaciones' => $nuevas_observaciones];
         registrarLog('hc', $id_hc, 'EDITAR', $resumen, $detalle_anterior, $detalle_nuevo);
+        registrarAuditoria('historias_clinicas', $id_hc, 'observaciones', $obs_anterior, $nuevas_observaciones);
         $mensaje = 'Observaciones actualizadas exitosamente';
         $tipo_mensaje = 'success';
     } else {

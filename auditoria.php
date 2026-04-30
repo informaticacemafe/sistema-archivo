@@ -254,14 +254,17 @@ $entidades_traducidas = array(
                 <div class="card-body" id="auditoria_tecnica" style="display: none;">
                     <p><small>Esta sección muestra el registro detallado campo por campo de la tabla <code>auditoria</code> para análisis técnicos.</small></p>
                     <?php
-                    $tecnicos = $conexion->query("
+                    $stmt_tecnicos = $conexion->prepare("
                         SELECT a.*, u.username, u.nombre, u.apellido
                         FROM auditoria a
                         INNER JOIN usuarios u ON a.usuario_id = u.id_usuario
-                        WHERE DATE(a.fecha_hora) BETWEEN '{$fecha_desde}' AND '{$fecha_hasta}'
+                        WHERE DATE(a.fecha_hora) BETWEEN ? AND ?
                         ORDER BY a.fecha_hora DESC
                         LIMIT 200
                     ");
+                    $stmt_tecnicos->bind_param("ss", $fecha_desde, $fecha_hasta);
+                    $stmt_tecnicos->execute();
+                    $tecnicos = $stmt_tecnicos->get_result();
                     ?>
                     <?php if ($tecnicos && $tecnicos->num_rows > 0): ?>
                     <div class="table-responsive">

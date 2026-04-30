@@ -86,15 +86,16 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['accion'])) {
                 $detalle_anterior = [];
                 $detalle_nuevo = [];
                 $hay_cambios = false;
-                if ($anterior['nombre'] != $nombre) { $detalle_anterior['nombre'] = $anterior['nombre']; $detalle_nuevo['nombre'] = $nombre; $hay_cambios = true; }
-                if ($anterior['codigo'] != $codigo) { $detalle_anterior['codigo'] = $anterior['codigo']; $detalle_nuevo['codigo'] = $codigo; $hay_cambios = true; }
-                if ($anterior['color'] != $color) { $detalle_anterior['color'] = $anterior['color']; $detalle_nuevo['color'] = $color; $hay_cambios = true; }
-                if (isset($anterior['tiene_archivo']) && $anterior['tiene_archivo'] != $tiene_archivo) { $detalle_anterior['tiene_archivo'] = $anterior['tiene_archivo']; $detalle_nuevo['tiene_archivo'] = $tiene_archivo; $hay_cambios = true; }
-                if (isset($anterior['formato_numeracion']) && $anterior['formato_numeracion'] != $formato_numeracion) { $detalle_anterior['formato_numeracion'] = $anterior['formato_numeracion']; $detalle_nuevo['formato_numeracion'] = $formato_numeracion; $hay_cambios = true; }
+                if ($anterior['nombre'] != $nombre) { $detalle_anterior['nombre'] = $anterior['nombre']; $detalle_nuevo['nombre'] = $nombre; $hay_cambios = true; registrarAuditoria('fuentes', $id_fuente, 'nombre', $anterior['nombre'], $nombre); }
+                if ($anterior['codigo'] != $codigo) { $detalle_anterior['codigo'] = $anterior['codigo']; $detalle_nuevo['codigo'] = $codigo; $hay_cambios = true; registrarAuditoria('fuentes', $id_fuente, 'codigo', $anterior['codigo'], $codigo); }
+                if ($anterior['color'] != $color) { $detalle_anterior['color'] = $anterior['color']; $detalle_nuevo['color'] = $color; $hay_cambios = true; registrarAuditoria('fuentes', $id_fuente, 'color', $anterior['color'], $color); }
+                if (isset($anterior['tiene_archivo']) && $anterior['tiene_archivo'] != $tiene_archivo) { $detalle_anterior['tiene_archivo'] = $anterior['tiene_archivo']; $detalle_nuevo['tiene_archivo'] = $tiene_archivo; $hay_cambios = true; registrarAuditoria('fuentes', $id_fuente, 'tiene_archivo', $anterior['tiene_archivo'], $tiene_archivo); }
+                if (isset($anterior['formato_numeracion']) && $anterior['formato_numeracion'] != $formato_numeracion) { $detalle_anterior['formato_numeracion'] = $anterior['formato_numeracion']; $detalle_nuevo['formato_numeracion'] = $formato_numeracion; $hay_cambios = true; registrarAuditoria('fuentes', $id_fuente, 'formato_numeracion', $anterior['formato_numeracion'], $formato_numeracion); }
                 
                 if ($hay_cambios) {
                     $resumen = "Se modificó fuente: {$codigo} - {$nombre}";
-                    registrarLog('fuente', $id_fuente, 'EDITAR', $resumen, $detalle_anterior, $detalle_nuevo);
+            registrarLog('fuente', $id_fuente, 'EDITAR', $resumen, $detalle_anterior, $detalle_nuevo);
+            registrarAuditoria('fuentes', $id_fuente, 'activo', $_POST['activo'], $nuevo_estado);
                 }
 
                 $mensaje = 'Fuente actualizada exitosamente';
