@@ -70,6 +70,12 @@
                 <i>🔐</i> Auditoría
             </a>
         </li>
+        
+        <li>
+            <a href="configuracion.php" class="<?php echo basename($_SERVER['PHP_SELF']) == 'configuracion.php' ? 'active' : ''; ?>">
+                <i>⚙️</i> Configuración
+            </a>
+        </li>
         <?php endif; ?>
         
         <li style="margin-top: 20px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 10px;">

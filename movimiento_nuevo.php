@@ -117,6 +117,11 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         ];
         registrarLog('movimiento', $id_movimiento, 'CREAR', $resumen, $detalle_anterior, $detalle_nuevo);
 
+        registrarAuditoria('movimientos', $id_movimiento, 'tipo_movimiento', '', $tipo_movimiento, 'INSERT');
+        registrarAuditoria('movimientos', $id_movimiento, 'ubicacion_destino', '', $ubicacion_destino, 'INSERT');
+        registrarAuditoria('historias_clinicas', $id_hc, 'estado', $hc['estado'], $nuevo_estado);
+        registrarAuditoria('historias_clinicas', $id_hc, 'ubicacion_actual', $hc['ubicacion_actual'], $ubicacion_destino);
+
         // Redirigir a detalle de HC
         header('Location: hc_detalle.php?id=' . $id_hc . '&mensaje=movimiento_registrado');
         exit();
@@ -224,19 +229,17 @@ $movimientos = $conexion->query("
                             </select>
                         </div>
 
-                        <div class="form-group">
+                         <div class="form-group">
                             <label>Ubicación Destino *</label>
                             <select name="ubicacion_destino" id="ubicacion_destino_select"
                                 onchange="manejarCambioUbicacion()" required>
                                 <option value="">Seleccione ubicación...</option>
-                                <option value="Archivo Central">Archivo Central</option>
                                 <?php
-                                // Listar archivos de servicios activos
-                                $fuentes_archivo = $conexion->query("SELECT nombre FROM fuentes WHERE activo = 1 ORDER BY nombre");
-                                while ($fue = $fuentes_archivo->fetch_assoc()):
+                                $destinos_config = $conexion->query("SELECT nombre FROM movimientos_destinos WHERE activo = 1 ORDER BY nombre");
+                                while ($dest = $destinos_config->fetch_assoc()):
                                     ?>
-                                    <option value="Archivo <?php echo htmlspecialchars($fue['nombre']); ?>">
-                                        Archivo <?php echo htmlspecialchars($fue['nombre']); ?>
+                                    <option value="<?php echo htmlspecialchars($dest['nombre']); ?>">
+                                        <?php echo htmlspecialchars($dest['nombre']); ?>
                                     </option>
                                 <?php endwhile; ?>
                                 <option value="__otra__">📝 Otra ubicación (escribir manualmente)</option>
